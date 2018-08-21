@@ -9,13 +9,32 @@ import (
 	"github.com/aws/aws-sdk-go/service/kinesis"
 )
 
-// NewKinesisClient returns a new client with kinesis client
-func NewKinesisClient() Client {
-	svc := kinesis.New(session.New(aws.NewConfig()))
-	return &KinesisClient{svc}
+// ClientOption is used to override defaults when creating a KinesisClient
+type ClientOption func(*KinesisClient)
+
+// WithKinesis overrides the default Kinesis client
+func WithKinesis(svc *kinesis.Kinesis) ClientOption {
+	return func(kc *KinesisClient) {
+		kc.svc = svc
+	}
 }
 
-// Client acts as wrapper around Kinesis client
+// NewKinesisClient returns client to interface with Kinesis stream
+func NewKinesisClient(opts ...ClientOption) *KinesisClient {
+	kc := &KinesisClient{}
+
+	for _, opt := range opts {
+		opt(kc)
+	}
+
+	if kc.svc == nil {
+		kc.svc = kinesis.New(session.New(aws.NewConfig()))
+	}
+
+	return kc
+}
+
+// KinesisClient acts as wrapper around Kinesis client
 type KinesisClient struct {
 	svc *kinesis.Kinesis
 }
@@ -32,6 +51,19 @@ func (c *KinesisClient) GetShardIDs(streamName string) ([]string, error) {
 	}
 
 	ss := []string{}
+	for _, shard := range resp.StreamDescription.Shards {
+		ss = append(ss, *shard.ShardId)
+	}
+	resp, err = c.svc.DescribeStream(
+		&kinesis.DescribeStreamInput{
+			StreamName:            aws.String(streamName),
+			ExclusiveStartShardId: aws.String("shardId-000000000100"),
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("describe stream error: %v", err)
+	}
+
 	for _, shard := range resp.StreamDescription.Shards {
 		ss = append(ss, *shard.ShardId)
 	}
