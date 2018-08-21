@@ -55,6 +55,19 @@ func (c *KinesisClient) GetShardIDs(streamName string) ([]string, error) {
 	for _, shard := range resp.StreamDescription.Shards {
 		ss = append(ss, *shard.ShardId)
 	}
+	resp, err = c.svc.DescribeStream(
+		&kinesis.DescribeStreamInput{
+			StreamName:            aws.String(streamName),
+			ExclusiveStartShardId: aws.String("shardId-000000000100"),
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("describe stream error: %v", err)
+	}
+
+	for _, shard := range resp.StreamDescription.Shards {
+		ss = append(ss, *shard.ShardId)
+	}
 	return ss, nil
 }
 
